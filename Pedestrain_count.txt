@@ -1,0 +1,47 @@
+from awsglue.context import GlueContext
+from awsglue.dynamicframe import DynamicFrame
+from awsglue.transforms import Relationalize
+from awsglue.utils import getResolvedOptions
+from awsglue.job import Job
+from awsglue.transforms import *
+import logging
+import boto3
+import pyspark
+from pyspark.sql import Row
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
+
+sc = pyspark.SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+
+logger = logging.getLogger(__name__)
+
+df_pedestrian_count_hourly = spark.read.format('csv').option(header='true',inferSchema='true').load("s3a://pedestrian_count_raw/csv/pedestrian_count_hourly.csv")
+df_sensor_info=spark.read.format('csv').option(header='true',inferSchema='true').load("s3a://pedestrian_count_raw/csv/pedestrain_sensor_location.csv")
+#filtering only sensors with active status
+df_sensor_info=df_sensor_info.filter(trim(df_sensor_info.status) == "A")
+#removing unwanted column before joining the dataset 
+df_sensor_info=df_sensor_info.select("sensor_id","sensor_name","installation_date","location","direction_1","direction_2")
+#converting string format installation date to date and then extracting year , month and date of installation
+df_sensor_info.withColumn("installation_year",year(to_date("installation_date","yyyy/mm/dd")))
+df_sensor_info.withColumn("installation_month",Month(to_date("installation_date","yyyy/mm/dd")))
+df_sensor_info.withColumn("installation_day",Dayofmonth(to_date("installation_date","yyyy/mm/dd")))
+#joining two dataframes 
+df_joined=df_pedestrian_count_hourly.join(df_sensor_info,df_pedestrian_count_hourly.Sensor_ID == df_sensor_info.sensor_id,"inner")
+df_joined.withColumn("date_difference", 
+              datediff(to_date(("installation_date","yyyy/mm/dd")),
+                       to_date(date_format("Date_Time","MMMM DD,YYYY")"yyyy/mm/dd"))
+df_joined_max_ped_per_day=df_joined.filter(date_difference>=0)                     
+df_joined_max_ped_per_day=df_joined_max_ped_per_day.withColumn("max_pedestrain", f.sum("Hourly_Counts").over(Window.partitionBy("day","location")))
+df_joined_max_ped_per_day=df_joined_max_ped_per_day.sort(df_joined_max_ped_per_day.max_pedestrain.desc()).limit(10)
+df_joined_max_ped_per_month=df_joined.withColumn("max_pedestrain", f.sum("Hourly_Counts").over(Window.partitionBy("month","location")))
+
+#storing the dataframe in parquet format will be optimizing solution in perspective of storage as well as efficiency 
+df.write.colleasce(1).mode("overwrite").parquet("s3a://pedestrian_count_staging/parquet/Max_pedestrain_per_day.parquet")
+df.write.colleasce(1).mode("overwrite").parquet("s3a://pedestrian_count_staging/parquet/Max_pedestrain_per_month.parquet")
+
+
+
+
