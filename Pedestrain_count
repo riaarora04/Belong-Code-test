@@ -1,0 +1,35 @@
+Steps 
+
+Step 1 -:
+Download Three data sets to your local file system 
+Go to Aws s3 services , Create two s3 buckets 
+1) pedestrian_count_raw
+2) pedestrian_count_staging 
+Once buckets are created 
+Open pedestrian_count_raw bucket 
+Upload two files in csv format (pedestrian_count_hourly.csv , pedestrain_sensor_location.csv)
+
+Step 2 -:
+Create a glue job in pyspark format 
+Attaching the glue job  , that will read from s3 path(raw bucket) and write it back to s3 path (staging_bucket)
+
+Step 3 -:
+
+We will create the glue job event based . once there is file in s3 path this glue job will be triggered automatically and will read the file , fetch the values and put it back to another s3 location.
+Steps to add trigger to glue job -:
+In ETL choose Trigger option 
+Give name to your trigger 
+click on event based 
+click on next 
+choose the job name where we need to apply trigger , in our case (pedestrian_count.py)
+finish
+
+In Amazon Event Bridge console , under event we need to click on rules 
+name of the flow 
+after clicking it will give detail of s3 path .
+eventName -: put object 
+under target section -: event bridge rule should be configured with arn of glue job .
+
+
+
+Conclusion -: we created one glue job which will be triggered whenever we receive and file in specified s3 location . The glue job will read the data , fetch the information accordingly and put it to some other s3 location .
